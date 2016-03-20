@@ -1,12 +1,9 @@
 import ConfigParser
 import sqlite3
 import datetime
+import os
 
 from imgurpython import ImgurClient
-
-
-# Ideas: When splitting comments, add in dashes at syllable breaks (or break around words).
-# Optionally, add a 1/x 2/x etc counter to the comments.
 
 
 class ImgurBot:
@@ -22,34 +19,65 @@ class ImgurBot:
         self.name = name
 
         # Initialize the logfile for writing.
-        self.logfile = open(self.name + ".txt", 'a')
+        self.logfile = open(os.path.normpath(os.getcwd() + "/log/" + self.name + ".log"), 'a')
         self.log("Welcome to ImgurBot v" + self.version + ". Initializing bot '" + self.name + "'.")
 
         # Set up the SQLite database.
         try:
-            self.db = sqlite3.connect(self.name + '.db')
+            # Inform the user that a new .db file is being created (if not previously extant).
+            db_path = os.path.normpath(os.getcwd() + "/db/" + self.name + ".db")
+            if not os.path.isfile(db_path):
+                self.log("- Creating database at " + db_path + ".")
+            else:
+                self.log("- Connecting to database at " + db_path + ".")
+
+            self.db = sqlite3.connect(db_path)
             self.db.execute("CREATE TABLE IF NOT EXISTS seen(id TEXT PRIMARY KEY NOT NULL)")
 
-        except sqlite3.Error, e:
-            self.log("Error in DB setup: " + e.args[0] + ". Terminating.")
+        except sqlite3.Error as e:
+            self.log("Error in DB setup: " + str(e) + ": " + str(e.args) + ". Terminating.")
             if self.db:
                 self.db.close()
             exit(0)
 
-        # Import data from the config_file (BOTNAME.ini).
+        # Create our ConfigParser in preparation for reading or writing the .ini file.
         self.config = ConfigParser.ConfigParser()
-        self.config.read(self.name + ".ini")
+
+        cfg_path = os.path.normpath(os.getcwd() + "/cfg/" + self.name + ".ini")
+        self.config.read(cfg_path)
+
+        # Test if config file exists. If not, create a template .ini file and terminate.
+        if not os.path.isfile(cfg_path):
+            print '\n'
+            self.log("Creating blank config file at " + cfg_path + ".")
+            self.log("Please fill this file with your credentials and try again.")
+
+            self.config.add_section('credentials')
+            self.config.set('credentials', 'client_id', 'YOUR_CLIENT_ID_HERE')
+            self.config.set('credentials', 'client_secret', 'YOUR_CLIENT_SECRET_HERE')
+            self.config.set('credentials', 'access_token', 'YOUR_ACCESS_TOKEN_HERE')
+            self.config.set('credentials', 'refresh_token', 'YOUR_REFRESH_TOKEN_HERE')
+
+            try:
+                with open(cfg_path, 'w') as inifile:
+                    self.config.write(inifile)
+            except IOError as e:
+                self.log("Error when writing file " + cfg_path + ": " + str(e) + ": " + str(e.args))
+            exit(0)
 
         # Initialize the client and perform authentication.
-        self.client = ImgurClient(self.config.get('credentials', 'client_id'),
-                                  self.config.get('credentials', 'client_secret'),
-                                  self.config.get('credentials', 'access_token'),
-                                  self.config.get('credentials', 'refresh_token'))
+        self.log("- Reading config information from " + cfg_path + ".")
+        try:
+            self.client = ImgurClient(self.config.get('credentials', 'client_id'),
+                                      self.config.get('credentials', 'client_secret'),
+                                      self.config.get('credentials', 'access_token'),
+                                      self.config.get('credentials', 'refresh_token'))
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
+            self.log("Error when parsing config from " + cfg_path + ": " + str(e) + ": " + str(e.args) +
+                     ". Terminating.")
+            exit(0)
 
-        # Close the config_file.
-        self.config.close()
-
-        self.log("Initialization complete.")
+        self.log("Initialization complete.\n")
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
@@ -61,7 +89,7 @@ class ImgurBot:
         self.db.close()
 
         # Close the logfile.
-        self.log("Finalization complete.")
+        self.log("Finalization complete.\n")
         self.logfile.close()
 
     # External / Imgur-facing methods
@@ -76,11 +104,15 @@ class ImgurBot:
 
     # Internal / non Imgur-facing methods
     def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
-        """Writes the given message to $name.txt, prefixed with current date and time.
+        """Writes the given message to $name.log, prefixed with current date and time. Ends with a newline.
+        Also prints the message to stdout.
+
         :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
         :type message: str
+        :type prefix: str
         """
-        self.logfile.write(prefix + message)
+        print message
+        self.logfile.write(prefix + message + '\n')
 
     def mark_seen(self, post_id):
         """Marks a post identified by post_id as seen.
