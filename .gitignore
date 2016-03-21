@@ -1,7 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Project-specific files
 *.ini
 *.log
 *.db
-*.pyc
 
+# OSX and PyCharm files
 .DS_Store
 .idea/
