@@ -32,13 +32,13 @@ class ImgurBot:
         self.name = name
 
         # Create our directories and set up our paths.
-        self.log_dir = self.ensure_dir_in_cwd_exists("log")
+        self.log_dir = ImgurBot.ensure_dir_in_cwd_exists("log")
         self.log_path = os.path.normpath(self.log_dir + "/" + self.name + ".log")
 
-        self.ini_dir = self.ensure_dir_in_cwd_exists("ini")
+        self.ini_dir = ImgurBot.ensure_dir_in_cwd_exists("ini")
         self.ini_path = os.path.normpath(self.ini_dir + "/" + self.name + ".ini")
 
-        self.db_dir = self.ensure_dir_in_cwd_exists("db")
+        self.db_dir = ImgurBot.ensure_dir_in_cwd_exists("db")
         self.db_path = os.path.normpath(self.db_dir + "/" + self.name + ".db")
 
         # Initialize the logfile for writing.
@@ -166,7 +166,9 @@ class ImgurBot:
 
     def create_new_ini(self):
         """ Creates a template config file for the user to fill out. """
-        print '\n'
+
+        # TODO: Refactor this so instead of creating a blank file it interactively creates the correct file.
+
         self.log("Creating blank config file at " + self.ini_path + ".")
         self.log("Please fill this file with your credentials and try again.")
 
