@@ -111,15 +111,14 @@ class ImgurBot:
         TODO: Intelligent splitting on whitespace, indexing split comments with numbers.
         :type gallery_id: str
         :type comment_text: str
-        :return: None
         """
+        # TODO: Create.
 
     # Internal / non Imgur-facing methods
     def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
         """Writes the given message to $name.log, prefixed with current date and time. Ends with a newline.
         Also prints the message to stdout.
 
-        :rtype: None
         :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
         :type message: str
         :type prefix: str
@@ -131,6 +130,7 @@ class ImgurBot:
         """Marks a post identified by post_id as seen.
         :type post_id: str
         """
+        # TODO: Create.
 
     def has_seen(self, post_id):
         """Boolean check for if the bot has seen the post identified by post_id.
@@ -138,10 +138,12 @@ class ImgurBot:
 
         :return: True if post_id in DB, false otherwise.
         """
+        # TODO: Create.
 
     def reset_seen(self):
         """ Purge the 'seen' table.
         """
+        # TODO: Should I add some sort of 'are you sure you want to do this' verification? Or a backup?
         self.log("Dropping 'seen' table and recreating with no data.")
         cursor = self.db.cursor()
         cursor.execute("DROP TABLE IF EXISTS seen")
@@ -149,6 +151,7 @@ class ImgurBot:
         self.db.commit()
 
     def create_new_ini(self):
+        """ Creates a template config file for the user to fill out. """
         print '\n'
         self.log("Creating blank config file at " + self.ini_path + ".")
         self.log("Please fill this file with your credentials and try again.")
@@ -212,7 +215,7 @@ class ImgurBot:
         From ImgurPython's examples/helpers.py file. Imported to enable 2.x and 3.x Python compatibility.
 
         :type string: str
-        :returns: The user's inputted string.
+        :return: The user's inputted string.
         """
         try:
             return raw_input(string)
@@ -224,7 +227,7 @@ class ImgurBot:
         """ Create a config parser for reading INI files
         From ImgurPython's examples/helpers.py file. Imported to enable 2.x and 3.x Python compatibility.
 
-        :returns: The output of ConfigParser.ConfigParser() or configparser.ConfigParser() depending on Python version.
+        :return: The output of ConfigParser.ConfigParser() or configparser.ConfigParser() depending on Python version.
         """
         # noinspection PyBroadException
         try:
