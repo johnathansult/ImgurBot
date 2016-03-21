@@ -43,7 +43,7 @@ class ImgurBot:
 
         # Initialize the logfile for writing.
         self.logfile = open(self.log_path, 'a')
-        self.log("Welcome to ImgurBot v" + self.version + ".\n")
+        self.log("Welcome to ImgurBot v" + self.version + ".")
 
         # Set up the SQLite database.
         try:
@@ -101,6 +101,7 @@ class ImgurBot:
         self.db.close()
 
         # Close the logfile.
+        self.log("Successful termination of ImgurBot.")
         self.logfile.close()
 
     # External / Imgur-facing methods
