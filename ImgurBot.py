@@ -54,7 +54,7 @@ class ImgurBot:
             # Connect and ensure that the database is set up properly.
             self.db = sqlite3.connect(self.db_path)
             cursor = self.db.cursor()
-            cursor.execute("CREATE TABLE IF NOT EXISTS seen(id TEXT PRIMARY KEY NOT NULL)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS Seen(id TEXT PRIMARY KEY NOT NULL)")
 
         except sqlite3.Error as e:
             self.log("Error in DB setup: " + str(e) + ": " + str(e.args) + ". Terminating.")
@@ -97,7 +97,7 @@ class ImgurBot:
         # Disconnect from Imgur if necessary.
         # TODO: Figure out if this is actually necessary.
 
-        # Clean up the SQLite database.
+        # Clean up the SQLite database. Note: This does not perform a commit.
         self.db.close()
 
         # Close the logfile.
@@ -130,7 +130,14 @@ class ImgurBot:
         """Marks a post identified by post_id as seen.
         :type post_id: str
         """
-        # TODO: Create.
+
+        if self.has_seen(post_id):
+            self.log("Error: Attempting to mark as seen a post that already exists in the Seen table.")
+            return
+
+        # TODO: Sanitize input into SQL.
+        self.db.execute("INSERT INTO Seen(id) VALUES ('" + post_id + "')")
+        self.db.commit()
 
     def has_seen(self, post_id):
         """Boolean check for if the bot has seen the post identified by post_id.
@@ -138,16 +145,22 @@ class ImgurBot:
 
         :return: True if post_id in DB, false otherwise.
         """
-        # TODO: Create.
+
+        # TODO: Sanitize input into SQL.
+        cursor = self.db.cursor()
+        cursor.execute("SELECT * FROM Seen WHERE id = '" + post_id + "'")
+        for row in cursor:
+            return True
+        return False
 
     def reset_seen(self):
         """ Purge the 'seen' table.
         """
         # TODO: Should I add some sort of 'are you sure you want to do this' verification? Or a backup?
-        self.log("Dropping 'seen' table and recreating with no data.")
+        self.log("Dropping 'Seen' table and recreating with no data.")
         cursor = self.db.cursor()
-        cursor.execute("DROP TABLE IF EXISTS seen")
-        cursor.execute("CREATE TABLE seen(id TEXT PRIMARY KEY NOT NULL)")
+        cursor.execute("DROP TABLE IF EXISTS Seen")
+        cursor.execute("CREATE TABLE Seen(id TEXT PRIMARY KEY NOT NULL)")
         self.db.commit()
 
     def create_new_ini(self):
