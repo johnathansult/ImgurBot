@@ -101,7 +101,6 @@ assert bot.has_seen("0") == False
 # Test case: Adding conflicting entries to Seen table.
 test_msg("Adding conflicting entry to Seen table.")
 
-error_encountered = False
 try:
     bot.mark_seen("1")
 except sqlite3.IntegrityError as e:
