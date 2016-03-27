@@ -91,7 +91,7 @@ bot.initialize_logging()
 bot.initialize_database()
 
 test_msg("Adding entry to empty Seen table.")
-bot.reset_seen()
+bot.reset_seen(True)
 bot.mark_seen("1")
 assert bot.has_seen("1") == True
 bot.mark_seen("2")

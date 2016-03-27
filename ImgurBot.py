@@ -131,12 +131,20 @@ class ImgurBot:
         cursor.execute("SELECT * FROM Seen WHERE id = ?", [post_id])
         return cursor.fetchone() is not None
 
-    def reset_seen(self):
+    def reset_seen(self, force=False):
         """ Purge the 'seen' table.
+
+        :param force: True to skip verification message.
+        :type force: bool
         """
         assert self.db is not None, "Out-of-order call: initialize_database must be called before reset_seen."
 
-        # TODO: Should I add some sort of 'are you sure you want to do this' verification? Or a backup?
+        if not force:
+            response = self.get_input("Are you sure you want to delete the contents of the Seen table? (y/N): ")
+            if response != 'y':
+                print("Canceling reset_seen.")
+                return
+
         self.log("Dropping 'Seen' table and recreating with no data.")
         cursor = self.db.cursor()
         cursor.execute("DROP TABLE IF EXISTS Seen")
@@ -171,7 +179,9 @@ class ImgurBot:
                     raise
 
         self.log("Access and refresh token obtained.")
+        # noinspection PyTypeChecker
         self.config.set('credentials', 'access_token', credentials['access_token'])
+        # noinspection PyTypeChecker
         self.config.set('credentials', 'refresh_token', credentials['refresh_token'])
 
         if no_file_write:
@@ -186,7 +196,9 @@ class ImgurBot:
             self.log("Error in writing access and refresh tokens to " + self.ini_path + ": " +
                      str(e) + ": " + str(e.args[0]))
             self.log("Please manually add these tokens to the .ini file:")
+            # noinspection PyTypeChecker
             self.log("access_token = " + credentials['access_token'])
+            # noinspection PyTypeChecker
             self.log("refresh_token = " + credentials['refresh_token'])
             raise
 
