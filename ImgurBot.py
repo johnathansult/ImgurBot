@@ -13,9 +13,6 @@ class ImgurBot:
     """
     version = "0.1"
 
-    # TODO: Many functions use exit(0) when encountering fatal errors. This stops the program but also stops the unit
-    # ..... testing flow. Perhaps figure out a different way to handle this?
-
     def __init__(self, name="ImgurBot", testing_mode=False):
         """Initialize the ImgurBot.
 
@@ -40,15 +37,12 @@ class ImgurBot:
         self.log_dir = None
         self.log_path = None
         self.logfile = None
-
         self.db_dir = None
         self.db_path = None
         self.db = None
-
         self.ini_dir = None
         self.ini_path = None
         self.config = None
-
         self.client = None
 
         # Set the bot's name (defaults to ImgurBot).
@@ -58,7 +52,7 @@ class ImgurBot:
         self.testing_mode = testing_mode
 
         if self.testing_mode:
-            print("Testing mode enabled: Early termination of __init__.")
+            print("Testing mode enabled; performing early termination of __init__.")
             return
 
         # Initialize the logfile for writing.
@@ -115,13 +109,12 @@ class ImgurBot:
 
     def mark_seen(self, post_id):
         """Marks a post identified by post_id as seen.
+
+        Possible exception: sqlite.IntegrityError if the post was already marked as seen.
+
         :type post_id: str
         """
         assert self.db is not None, "Out-of-order call: initialize_database must be called before mark_seen."
-
-        if self.has_seen(post_id):
-            self.log("Error: Attempting to mark as seen a post that already exists in the Seen table.")
-            return
 
         self.db.execute("INSERT INTO Seen(id) VALUES (?)", [post_id])
         self.db.commit()
@@ -175,8 +168,7 @@ class ImgurBot:
                 elif str(e) == "(400) The client credentials are invalid":
                     # TODO: Interactive credential correction.
                     self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
-                    self.log("Terminating program.")
-                    exit(0)
+                    raise
 
         self.log("Access and refresh token obtained.")
         self.config.set('credentials', 'access_token', credentials['access_token'])
@@ -196,8 +188,7 @@ class ImgurBot:
             self.log("Please manually add these tokens to the .ini file:")
             self.log("access_token = " + credentials['access_token'])
             self.log("refresh_token = " + credentials['refresh_token'])
-            self.log("Program will now terminate.")
-            exit(0)
+            raise
 
     # Methods used to initialize the bot.
     def initialize_logging(self):
@@ -230,7 +221,7 @@ class ImgurBot:
             self.log("Error in DB setup: " + str(e) + ": " + str(e.args) + ". Terminating.")
             if self.db:
                 self.db.close()
-            exit(0)
+            raise
 
     def initialize_config(self):
         self.ini_dir = ImgurBot.ensure_dir_in_cwd_exists("ini")
@@ -289,7 +280,7 @@ class ImgurBot:
                 self.log("client_secret = " + client_secret)
                 self.log("access_token = " + access_token)
                 self.log("refresh_token = " + refresh_token)
-                exit(0)
+                raise
 
         # Point our config parser at the ini file.
         self.config.read(self.ini_path)
@@ -303,7 +294,7 @@ class ImgurBot:
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
             self.log("Error when parsing config from " + self.ini_path + ": " + str(e) + ": " + str(e.args) +
                      ". Terminating.")
-            exit(0)
+            raise
 
         # Check to make sure we have access and refresh tokens; if not, have the user go through token creation.
         if not (self.config.has_option('credentials', 'access_token') and

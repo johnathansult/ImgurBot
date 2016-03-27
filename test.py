@@ -1,11 +1,9 @@
 import ImgurBot
 import os
 import shutil
+import sqlite3
 
 name = "ImgurTestBot"
-
-# TODO: It may be necessary to refactor the ImgurBot class (or the testing regimen) so that we don't exhaust our
-#       rate limit / available requests.
 
 ImgurBot.ImgurBot.get_input("WARNING: This will delete all files in the ini, log, and db directories. "
                             "Press 'enter' to proceed with the test.")
@@ -22,8 +20,8 @@ def verify_dir_exists(directory):
     assert os.path.exists(os.path.normpath(os.getcwd() + "/" + directory)) == True
 
 
-def verify_file_exists(file):
-    assert os.path.isfile(os.path.normpath(os.getcwd() + "/" + file)) == True
+def verify_file_exists(my_file):
+    assert os.path.isfile(os.path.normpath(os.getcwd() + "/" + my_file)) == True
 
 
 def new_test_set(message):
@@ -102,7 +100,13 @@ assert bot.has_seen("0") == False
 
 # Test case: Adding conflicting entries to Seen table.
 test_msg("Adding conflicting entry to Seen table.")
-bot.mark_seen("1")
+
+error_encountered = False
+try:
+    bot.mark_seen("1")
+except sqlite3.IntegrityError as e:
+    error_encountered = True
+assert error_encountered
 assert bot.has_seen("1") == True
 assert bot.has_seen("0") == False
 
