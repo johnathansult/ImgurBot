@@ -105,8 +105,10 @@ error_encountered = False
 try:
     bot.mark_seen("1")
 except sqlite3.IntegrityError as e:
-    error_encountered = True
-assert error_encountered
+    pass
+else:
+    print("Test failure: mark_seen of previously seen post did not produce an error.")
+
 assert bot.has_seen("1") == True
 assert bot.has_seen("0") == False
 
