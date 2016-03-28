@@ -13,6 +13,11 @@ class ImgurBot:
     """
     version = "0.1"
 
+    # From https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words.
+    # Space not included since it's safe in these use cases. Other characters are probably safe too, but YMMV.
+    # TODO: Figure out if any other characters can be pruned from this list for enhanced user-friendliness.
+    restricted_filesystem_chars = "/\\?*%:|\"<>."
+
     def __init__(self, name="ImgurBot", testing_mode=False):
         """Initialize the ImgurBot.
 
@@ -45,9 +50,8 @@ class ImgurBot:
         self.config = None
         self.client = None
 
-        # Set the bot's name (defaults to ImgurBot).
-        # TODO: Sanitize so we don't get unexpected behavior when using this in filesystem paths.
-        self.name = name
+        # Set the bot's name (defaults to ImgurBot). Remove restricted filesystem characters while we're at it.
+        self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
 
         self.testing_mode = testing_mode
 
@@ -57,6 +61,8 @@ class ImgurBot:
 
         # Initialize the logfile for writing.
         self.initialize_logging()
+        if name != self.name:
+            self.log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
 
         # Set up the SQLite database.
         self.initialize_database()
@@ -69,9 +75,6 @@ class ImgurBot:
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
-
-        # Disconnect from Imgur if necessary.
-        # TODO: Figure out if this is actually necessary.
 
         # Clean up the SQLite database. Note: This does not perform a commit.
         if self.db is not None:
@@ -244,7 +247,6 @@ class ImgurBot:
 
         # Test if config file exists. If not, create a template .ini file and terminate.
         if not os.path.isfile(self.ini_path):
-            # TODO: Refactor this so instead of creating a blank file it interactively creates the correct file.
             self.config.add_section('credentials')
 
             self.log("No .ini file was found. Beginning interactive creation.")
@@ -360,7 +362,7 @@ class ImgurBot:
         :param directory: str
         :return: The full OS-normalized path to the directory with no trailing slash.
         """
-        path = os.path.normpath(os.getcwd() + "/" + directory.translate(None, "/\\"))
+        path = os.path.normpath(os.getcwd() + "/" + directory.translate(None, ImgurBot.restricted_filesystem_chars))
         if not os.path.exists(path):
             try:
                 os.makedirs(path)
