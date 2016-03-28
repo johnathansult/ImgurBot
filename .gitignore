@@ -8,6 +8,11 @@ __pycache__/
 *.log
 *.db
 
+# Project-specific directories
+ini/
+log/
+db/
+
 # OSX and PyCharm files
 .DS_Store
 .idea/

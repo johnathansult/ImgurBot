@@ -2,6 +2,7 @@ import ConfigParser
 import sqlite3
 import datetime
 import os
+import shutil
 
 from imgurpython import ImgurClient
 from imgurpython.helpers.error import ImgurClientError
@@ -135,15 +136,18 @@ class ImgurBot:
         return cursor.fetchone() is not None
 
     def reset_seen(self, force=False):
-        """ Purge the 'seen' table.
+        """ Delete and re-create the 'seen' table in the database.
 
         :param force: True to skip verification message.
         :type force: bool
         """
+        # TODO: Should this method be repurposed to only delete all rows and not remake the table? User may wish to
+        # ..... have a customized 'seen' table, in which case remaking it with default config is sub-optimal.
+
         assert self.db is not None, "Out-of-order call: initialize_database must be called before reset_seen."
 
         if not force:
-            response = self.get_input("Are you sure you want to delete the contents of the Seen table? (y/N): ")
+            response = self.get_input("Are you sure you want to delete and recreate the Seen table? (y/N): ")
             if response != 'y':
                 print("Canceling reset_seen.")
                 return
@@ -177,9 +181,19 @@ class ImgurBot:
                 if str(e) == "(400) Invalid Pin":
                     print("\nYou have entered an invalid pin. Try again.")
                 elif str(e) == "(400) The client credentials are invalid":
-                    # TODO: Interactive credential correction.
-                    self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
-                    raise
+                    # offer choice: delete credentials and recreate?
+                    result = self.get_input("Your client credentials were incorrect. " +
+                                            "Would you like to go through interactive bot registration? (y/N): ")
+                    if result == 'y':
+                        self.log("Moving " + self.ini_path + " to " + self.ini_path + ".old.")
+                        shutil.copy(self.ini_path, self.ini_path + ".old")
+                        os.remove(self.ini_path)
+                        self.initialize_config()
+                        self.initialize_client()
+                        return
+                    else:
+                        self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
+                        raise
 
         self.log("Access and refresh token obtained.")
         # noinspection PyTypeChecker
