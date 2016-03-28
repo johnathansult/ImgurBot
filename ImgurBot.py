@@ -7,12 +7,15 @@ import shutil
 from imgurpython import ImgurClient
 from imgurpython.helpers.error import ImgurClientError
 
+# TODO: Implement rate limiting on non-OAuth calls.
+# TODO: Figure out some kind of failsafe that stops the client cold when ImgurClientRateLimitError is thrown.
+# ..... Hitting that 5x in a month bans the bot for the rest of the month.
 
 class ImgurBot:
     """
-    A class to implement a simple bot for interfacing with Imgur.
+    A class to implement a bot for interfacing with Imgur.
     """
-    version = "0.1"
+    version = "0.1a"
 
     # From https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words.
     # Space not included since it's safe in these use cases. Other characters are probably safe too, but YMMV.
@@ -23,14 +26,6 @@ class ImgurBot:
         """Initialize the ImgurBot.
 
         :type name: str
-
-        This constructor performs the following tasks:
-            - Sets up the bot with the passed name, or ImgurBot by default
-            - Prepares the logfile for writing (log/BOTNAME.txt)
-            - Prepares the database for access (db/BOTNAME.db)
-            - Checks for appropriate access credentials (cfg/BOTNAME.ini)
-            - Walks user through obtaining access and refresh tokens if not supplied
-            - Initializes the Imgur client (self.client)
 
         This constructor has a testing_mode option which sets the name and then exits. This is designed to enable unit
         testing of other initialization measures (database, config). Please make sure you understand the flow of the
@@ -50,20 +45,20 @@ class ImgurBot:
         self.ini_path = None
         self.config = None
         self.client = None
+        self.testing_mode = testing_mode
+        self.debug_mode = testing_mode or debug_mode
 
         # Set the bot's name (defaults to ImgurBot). Remove restricted filesystem characters while we're at it.
         self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
 
-        self.testing_mode = testing_mode
-        self.debug_mode = debug_mode
-
         if self.testing_mode:
             print("Testing mode enabled; forcing debug_mode and performing early termination of __init__.")
-            self.debug_mode = True
+            print("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
             return
 
         # Initialize the logfile for writing.
         self.initialize_logging()
+        self.log("Initializing ImgurBot version " + self.version + "...")
         if name != self.name:
             self.debug_log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
 
@@ -75,6 +70,7 @@ class ImgurBot:
 
         # Initialize the client and perform authentication.
         self.initialize_client()
+        self.log("Initialization of bot '" + self.name + "' complete.")
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
@@ -103,6 +99,55 @@ class ImgurBot:
         :type comment_text: str
         """
         # TODO: Create.
+
+    def get_new_auth_info(self, no_file_write=False):
+        """ Interfaces with Imgur and the user to obtain access and refresh tokens, then writes them to the .ini file.
+        """
+        # No access or refresh tokens. Send them to the auth workflow.
+        assert self.config is not None, "Out-of-order call: initialize_config must be called before get_new_auth_info."
+        assert self.client is not None, "Out-of-order call: initialize_client must be called before get_new_auth_info."
+
+        print("")
+        self.log("You need to supply your PIN to obtain access and refresh tokens.")
+        self.log("Go to the following URL: " + format(self.client.get_auth_url('pin')))
+
+        credentials = []
+
+        # Loop and obtain the correct PIN.
+        while True:
+            try:
+                pin = self.get_input("Enter the PIN code from the above URL: ")
+                credentials = self.client.authorize(pin, 'pin')
+                print("")
+                break
+            except ImgurClientError as e:
+                if str(e) == "(400) Invalid Pin":
+                    print("\nYou have entered an invalid pin. Try again.")
+                elif str(e) == "(400) The client credentials are invalid":
+                    # offer choice: delete credentials and recreate?
+                    result = self.get_input("Your client credentials were incorrect. " +
+                                            "Would you like to go through interactive bot registration? (y/N): ")
+                    if result == 'y':
+                        self.log("Moving " + self.ini_path + " to " + self.ini_path + ".old.")
+                        shutil.copy(self.ini_path, self.ini_path + ".old")
+                        os.remove(self.ini_path)
+                        self.initialize_config()
+                        self.initialize_client()
+                        return
+                    else:
+                        self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
+                        raise
+
+        self.log("Access and refresh token successfully obtained.")
+        # noinspection PyTypeChecker
+        self.config.set('credentials', 'access_token', credentials['access_token'])
+        # noinspection PyTypeChecker
+        self.config.set('credentials', 'refresh_token', credentials['refresh_token'])
+
+        if no_file_write:
+            return
+
+        self.write_ini_file()
 
     # Internal / non Imgur-facing methods
     def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
@@ -179,54 +224,6 @@ class ImgurBot:
         cursor.execute("CREATE TABLE Seen(id TEXT PRIMARY KEY NOT NULL)")
         self.db.commit()
 
-    def get_new_auth_info(self, no_file_write=False):
-        """ Interfaces with Imgur and the user to obtain access and refresh tokens, then writes them to the .ini file.
-        """
-        # No access or refresh tokens. Send them to the auth workflow.
-        assert self.config is not None, "Out-of-order call: initialize_config must be called before get_new_auth_info."
-        assert self.client is not None, "Out-of-order call: initialize_client must be called before get_new_auth_info."
-
-        print("")
-        self.log("You need to supply your PIN to obtain access and refresh tokens.")
-        self.log("Go to the following URL: " + format(self.client.get_auth_url('pin')))
-
-        credentials = []
-
-        # Loop and obtain the correct PIN.
-        while True:
-            try:
-                pin = self.get_input("Enter the PIN code from the above URL: ")
-                credentials = self.client.authorize(pin, 'pin')
-                break
-            except ImgurClientError as e:
-                if str(e) == "(400) Invalid Pin":
-                    print("\nYou have entered an invalid pin. Try again.")
-                elif str(e) == "(400) The client credentials are invalid":
-                    # offer choice: delete credentials and recreate?
-                    result = self.get_input("Your client credentials were incorrect. " +
-                                            "Would you like to go through interactive bot registration? (y/N): ")
-                    if result == 'y':
-                        self.log("Moving " + self.ini_path + " to " + self.ini_path + ".old.")
-                        shutil.copy(self.ini_path, self.ini_path + ".old")
-                        os.remove(self.ini_path)
-                        self.initialize_config()
-                        self.initialize_client()
-                        return
-                    else:
-                        self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
-                        raise
-
-        self.log("Access and refresh token successfully obtained.")
-        # noinspection PyTypeChecker
-        self.config.set('credentials', 'access_token', credentials['access_token'])
-        # noinspection PyTypeChecker
-        self.config.set('credentials', 'refresh_token', credentials['refresh_token'])
-
-        if no_file_write:
-            return
-
-        self.write_ini_file()
-
     def write_ini_file(self):
         self.debug_log("Writing config file at " + self.ini_path + ".")
         try:
@@ -253,8 +250,6 @@ class ImgurBot:
 
         self.logfile = open(self.log_path, 'a')
 
-        self.log("Welcome to ImgurBot v" + self.version + ".")
-
     def initialize_database(self):
         self.db_dir = ImgurBot.ensure_dir_in_cwd_exists("db")
         self.db_path = os.path.normpath(self.db_dir + "/" + self.name + ".db")
@@ -280,25 +275,22 @@ class ImgurBot:
         self.ini_path = os.path.normpath(self.ini_dir + "/" + self.name + ".ini")
 
         # Generate our config parser.
-        self.config = self.get_config_parser()
+        self.config = self.get_raw_config_parser()
 
         # Test if config file exists. If not, create a template .ini file and terminate.
         if not os.path.isfile(self.ini_path):
             self.config.add_section('credentials')
 
             self.debug_log("No .ini file was found. Beginning interactive creation.")
+            print("")
             print("To proceed, you will need a client_id and client_secret tokens, which can be obtained from Imgur at")
             print("the following website: https://api.imgur.com/oauth2/addclient")
             print("")
 
-            client_id = None
-            client_secret = None
-            access_token = None
-            refresh_token = None
-
             while True:
                 client_id = self.get_input("Enter your client_id: ")
                 client_secret = self.get_input("Enter your client_secret: ")
+                print("")
                 reply = self.get_input("You entered client_id " + client_id + " and client_secret " + client_secret +
                                        ". Are these correct? (y/N): ")
                 if reply == "y":
@@ -351,12 +343,11 @@ class ImgurBot:
                 self.client.get_account('me')
             except ImgurClientError as e:
                 if str(e) == "(400) Error refreshing access token!":
-                    self.log("The supplied access and refresh tokens were invalid. Try again.")
+                    self.log("The supplied access and refresh tokens were invalid.")
                     self.config.remove_option('credentials', 'access_token')
                     self.config.remove_option('credentials', 'refresh_token')
             else:
                 break
-
 
     # Static helper methods.
     @staticmethod
@@ -374,7 +365,7 @@ class ImgurBot:
             return input(string)
 
     @staticmethod
-    def get_config_parser():
+    def get_raw_config_parser():
         """ Create a config parser for reading INI files
         From ImgurPython's examples/helpers.py file. Imported to enable 2.x and 3.x Python compatibility.
         Modified to return a RawConfigParser to enable remove_option.
