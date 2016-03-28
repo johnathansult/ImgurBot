@@ -19,7 +19,7 @@ class ImgurBot:
     # TODO: Figure out if any other characters can be pruned from this list for enhanced user-friendliness.
     restricted_filesystem_chars = "/\\?*%:|\"<>."
 
-    def __init__(self, name="ImgurBot", testing_mode=False):
+    def __init__(self, name="ImgurBot", testing_mode=False, debug_mode=False):
         """Initialize the ImgurBot.
 
         :type name: str
@@ -55,15 +55,17 @@ class ImgurBot:
         self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
 
         self.testing_mode = testing_mode
+        self.debug_mode = debug_mode
 
         if self.testing_mode:
-            print("Testing mode enabled; performing early termination of __init__.")
+            print("Testing mode enabled; forcing debug_mode and performing early termination of __init__.")
+            self.debug_mode = True
             return
 
         # Initialize the logfile for writing.
         self.initialize_logging()
         if name != self.name:
-            self.log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
+            self.debug_log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
 
         # Set up the SQLite database.
         self.initialize_database()
@@ -76,6 +78,11 @@ class ImgurBot:
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
+
+        # Record our most up-to-date auth token.
+        if self.config is not None and self.client is not None and self.client.auth is not None:
+            self.config.set('credentials', 'access_token', self.client.auth.get_current_access_token())
+            self.write_ini_file()
 
         # Clean up the SQLite database. Note: This does not perform a commit.
         if self.db is not None:
@@ -100,7 +107,7 @@ class ImgurBot:
     # Internal / non Imgur-facing methods
     def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
         """Writes the given message to $name.log, prefixed with current date and time. Ends with a newline.
-        Also prints the message to stdout.
+        Also prints the message to the screen.
 
         :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
         :type message: str
@@ -110,6 +117,20 @@ class ImgurBot:
 
         print(message)
         self.logfile.write(prefix + message + '\n')
+
+    def debug_log(self, message, prefix='[' + datetime.datetime.now().strftime("%c") + ']: DEBUG: '):
+        """If self.debug_mode is True: Writes the given message to $name.log, prefixed with current date and time.
+        Ends with a newline. Also prints the message to the screen.
+
+        :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
+        :type message: str
+        :type prefix: str
+        """
+        if self.debug_mode:
+            assert self.logfile is not None, "Out-of-order call: initialize_logging must be called before debug_log."
+
+            print(message)
+            self.logfile.write(prefix + message + '\n')
 
     def mark_seen(self, post_id):
         """Marks a post identified by post_id as seen.
@@ -152,7 +173,7 @@ class ImgurBot:
                 print("Canceling reset_seen.")
                 return
 
-        self.log("Dropping 'Seen' table and recreating with no data.")
+        self.debug_log("Dropping 'Seen' table and recreating with no data.")
         cursor = self.db.cursor()
         cursor.execute("DROP TABLE IF EXISTS Seen")
         cursor.execute("CREATE TABLE Seen(id TEXT PRIMARY KEY NOT NULL)")
@@ -195,7 +216,7 @@ class ImgurBot:
                         self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
                         raise
 
-        self.log("Access and refresh token obtained.")
+        self.log("Access and refresh token successfully obtained.")
         # noinspection PyTypeChecker
         self.config.set('credentials', 'access_token', credentials['access_token'])
         # noinspection PyTypeChecker
@@ -204,19 +225,21 @@ class ImgurBot:
         if no_file_write:
             return
 
-        self.log("Writing tokens to " + self.ini_path + ".")
+        self.write_ini_file()
 
+    def write_ini_file(self):
+        self.debug_log("Writing config file at " + self.ini_path + ".")
         try:
             with open(self.ini_path, 'w') as ini_file:
                 self.config.write(ini_file)
         except IOError as e:
-            self.log("Error in writing access and refresh tokens to " + self.ini_path + ": " +
-                     str(e) + ": " + str(e.args[0]))
-            self.log("Please manually add these tokens to the .ini file:")
-            # noinspection PyTypeChecker
-            self.log("access_token = " + credentials['access_token'])
-            # noinspection PyTypeChecker
-            self.log("refresh_token = " + credentials['refresh_token'])
+            self.log("Error when writing config file at " + self.ini_path + ": " + str(e) + ": " + str(e.args))
+            self.log("Please manually create the file with the following contents: \n")
+            self.log("[credentials]")
+            self.log("client_id = " + self.config.get('credentials', 'client_id'))
+            self.log("client_secret = " + self.config.get('credentials', 'client_secret'))
+            self.log("access_token = " + self.config.get('credentials', 'access_token'))
+            self.log("refresh_token = " + self.config.get('credentials', 'refresh_token'))
             raise
 
     # Methods used to initialize the bot.
@@ -239,7 +262,7 @@ class ImgurBot:
         try:
             # Inform the user that a new .db file is being created (if not previously extant).
             if not os.path.isfile(self.db_path):
-                self.log("Creating database at " + self.db_path + ".")
+                self.debug_log("Creating database at " + self.db_path + ".")
 
             # Connect and ensure that the database is set up properly.
             self.db = sqlite3.connect(self.db_path)
@@ -263,7 +286,7 @@ class ImgurBot:
         if not os.path.isfile(self.ini_path):
             self.config.add_section('credentials')
 
-            self.log("No .ini file was found. Beginning interactive creation.")
+            self.debug_log("No .ini file was found. Beginning interactive creation.")
             print("To proceed, you will need a client_id and client_secret tokens, which can be obtained from Imgur at")
             print("the following website: https://api.imgur.com/oauth2/addclient")
             print("")
@@ -296,19 +319,7 @@ class ImgurBot:
                         self.config.set('credentials', 'refresh_token', refresh_token)
                         break
 
-            self.log("Writing new config to " + self.ini_path + ".")
-
-            try:
-                with open(self.ini_path, 'w') as ini_file:
-                    self.config.write(ini_file)
-            except IOError as e:
-                self.log("Error when writing file " + self.ini_path + ": " + str(e) + ": " + str(e.args))
-                self.log("For your reference, your tokens are: ")
-                self.log("client_id = " + client_id)
-                self.log("client_secret = " + client_secret)
-                self.log("access_token = " + access_token)
-                self.log("refresh_token = " + refresh_token)
-                raise
+            self.write_ini_file()
 
         # Point our config parser at the ini file.
         self.config.read(self.ini_path)
@@ -324,16 +335,28 @@ class ImgurBot:
                      ". Terminating.")
             raise
 
-        # Check to make sure we have access and refresh tokens; if not, have the user go through token creation.
-        if not (self.config.has_option('credentials', 'access_token') and
-                self.config.has_option('credentials', 'refresh_token')):
-            self.get_new_auth_info()
+        # Auth verification loop.
+        while True:
+            # Check to make sure we have access and refresh tokens; if not, have the user go through token creation.
+            if not (self.config.has_option('credentials', 'access_token') and
+                    self.config.has_option('credentials', 'refresh_token')):
+                        self.get_new_auth_info()  # Automatically checks client credential validity.
 
-        # Use the access and refresh tokens read from the file / imported through account authorization.
-        self.client.set_user_auth(self.config.get('credentials', 'access_token'),
-                                  self.config.get('credentials', 'refresh_token'))
+            # Use the access and refresh tokens read from the file / imported through account authorization.
+            self.client.set_user_auth(self.config.get('credentials', 'access_token'),
+                                      self.config.get('credentials', 'refresh_token'))
 
-        # TODO: Figure out how to verify that all the tokens here are valid.
+            # Verify that the access/refresh tokens we were supplied with are valid.
+            try:
+                self.client.get_account('me')
+            except ImgurClientError as e:
+                if str(e) == "(400) Error refreshing access token!":
+                    self.log("The supplied access and refresh tokens were invalid. Try again.")
+                    self.config.remove_option('credentials', 'access_token')
+                    self.config.remove_option('credentials', 'refresh_token')
+            else:
+                break
+
 
     # Static helper methods.
     @staticmethod
@@ -354,6 +377,7 @@ class ImgurBot:
     def get_config_parser():
         """ Create a config parser for reading INI files
         From ImgurPython's examples/helpers.py file. Imported to enable 2.x and 3.x Python compatibility.
+        Modified to return a RawConfigParser to enable remove_option.
 
         :return: The output of ConfigParser.ConfigParser() or configparser.ConfigParser() depending on Python version.
         """
@@ -361,11 +385,11 @@ class ImgurBot:
         try:
             # noinspection PyUnresolvedReferences
             import ConfigParser
-            return ConfigParser.ConfigParser()
+            return ConfigParser.RawConfigParser()
         except:
             # noinspection PyUnresolvedReferences
             import configparser
-            return configparser.ConfigParser()
+            return configparser.RawConfigParser()
 
     @staticmethod
     def ensure_dir_in_cwd_exists(directory):
