@@ -2,27 +2,34 @@ import ImgurBot
 import os
 import shutil
 import sqlite3
+import string
+import random
 
 name = "ImgurTestBot"
 
 # TODO: Should this entire file be moved into ImgurBot as a if-main-then test?
 
+
 # Directory destruction and creation methods, used in the following tests.
 def delete_dir(directory):
+    """Delete the directory at os.getcwd()/directory."""
     if os.path.exists(os.path.normpath(os.getcwd() + "/" + directory)):
         shutil.rmtree(os.path.normpath(os.getcwd() + "/" + directory))
     assert os.path.exists(os.path.normpath(os.getcwd() + "/" + directory)) == False
 
 
 def verify_dir_exists(directory):
+    """Check for the existence of a directory at os.getcwd()/directory."""
     assert os.path.exists(os.path.normpath(os.getcwd() + "/" + directory)) == True
 
 
 def verify_file_exists(my_file):
+    """Check for the existence of a file at os.getcwd()/file."""
     assert os.path.isfile(os.path.normpath(os.getcwd() + "/" + my_file)) == True
 
 
 def new_test_set(message):
+    """Print a message to indicate the beginning of a new test set. Message should be descriptive but concise."""
     global test_set, test_index
     if test_set >= 0:
         print("\n* Successful completion of Test Set " + str(test_set + 1) + ".")
@@ -33,16 +40,11 @@ test_set = -1  # Starts at -1 so that it becomes 0 on the first new_test_set cal
 
 
 def test_msg(message):
+    """Print a message describing the test about to be performed."""
     global test_index, test_set
     print("* Test case " + str(test_set + 1) + "-" + str(test_index) + ": " + message)
     test_index += 1
 test_index = 1
-
-
-def finished_testing():
-    global test_set
-    print("* Successful completion of Test Set " + str(test_set + 1) + ". All tests complete.")
-    exit(0)
 
 
 # Static method tests.
@@ -51,25 +53,25 @@ def finished_testing():
 # TODO: Test ensure_dir_in_cwd_exists.
 
 new_test_set("Comment processing.")
-import string
-import random
 
 # TODO: Fuzz more with random inputs.
 
 test_msg("Test with comments < 180 characters.")
-for i in range(1,179):
+for i in range(1, 179):
     random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(i))
     for comment in ImgurBot.ImgurBot.process_comment(random_comment):
         assert len(comment) <= 180
         assert comment == random_comment
 
 test_msg("Test with comment == 180 characters.")
+# noinspection PyRedeclaration
 random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(180))
 for comment in ImgurBot.ImgurBot.process_comment(random_comment):
     assert len(comment) <= 180
     assert comment == random_comment
 
 test_msg("Test with comment > 180 characters.")
+# noinspection PyRedeclaration
 random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20000))
 for comment in ImgurBot.ImgurBot.process_comment(random_comment):
     assert len(comment) <= 180
@@ -141,4 +143,4 @@ assert bot.has_seen("0") == False
 
 del bot
 
-finished_testing()
+print("* Successful completion of Test Set " + str(test_set + 1) + ". All tests complete.")
