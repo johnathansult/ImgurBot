@@ -375,7 +375,7 @@ class ImgurBot:
 
     @staticmethod
     def ensure_dir_in_cwd_exists(directory):
-        """ Guarantees that the given directory exists by creating it if not extant. Exits on failure.
+        """ Guarantees that the given directory exists by creating it if not extant.
         Note that this removes all slashes from the passed-in directory parameter, and as such will only ever create
         directories in the current working directory.
 
@@ -388,8 +388,8 @@ class ImgurBot:
                 os.makedirs(path)
             except OSError as e:
                 print("Error creating directory " + path + ": " + str(e) + ":" + str(e.args[0]))
-                print("Terminating program.")
-                exit(0)
+                raise
+
 
         assert os.path.exists(path), "ensure_dir_in_cwd_exists: Directory %s not found even after creation" % path
         return path
@@ -419,17 +419,20 @@ class ImgurBot:
             return comment_list
 
         # Calculate out the total number of comment blocks needed.
-        suffix = str(ImgurBot.calculate_comment_suffix(comment))
-        suffix_length = len(suffix)
+        suffix = ImgurBot.calculate_comment_suffix(comment)
+        suffix_length = len(str(suffix))
 
         # Append each comment (with " index/total" appended to it) to the comment_list.
         iterations = 0
         while len(comment) > 0:
             iterations += 1
             # Magic number explanation: 180 characters - (len(" ") + len("/")) = 178 characters
-            max_len = int(178 - math.ceil(math.log10(iterations + 1)) - suffix_length)
-            comment_list.append(comment[0:max_len] + " " + str(iterations) + "/" + suffix)
+            max_len = int((180 - len(" /")) - math.ceil(math.log10(iterations + 1)) - suffix_length)
+            comment_list.append(comment[0:max_len] + " " + str(iterations) + "/" + str(suffix))
             comment = comment[max_len:]
+
+        # Sanity check: We're not doing something like 4/3 or 2/3
+        assert iterations == suffix
 
         return comment_list
 
@@ -441,18 +444,28 @@ class ImgurBot:
 
         Accelerated pre-calculation available for strings less than 171937 characters in length. For the sake of
         completeness, brute-force calculation is performed on strings greater than that length.
+
+        Note: Explanations for pre-calculated magic numbers are provided in comments preceding the number's use.
         """
 
-        length = len(comment)
+        # Obtain the length of the comment, pre-formatted as a float to avoid truncation errors later.
+        length = float(len(comment))
 
-        if length <= 1584: # 180 chars - 4 chars per suffix = 176; 176 * 9 = 1584
-            return math.ceil(length / 176)
+        # 1584 = 9 chunks * (180 characters - len(" 1/9"))
+        if length <= 1584:
+            return int(math.ceil(length / 176))
 
-        if length <= (1575 + 15660): # 9 * (180-5) + 90 * (180 - 6)
-            return 9 + math.ceil((length - 1575) / 174)
+        # 17235 = 9 * (180 - len(" 1/99")) + (99 - 9) * (180 - len(" 10/99"))
+        if length <= 17235:
+            # 1575 = 9 * (180 - len(" 1/99"))
+            # 174 = 180 - len(" 10/99")
+            return int(9 + math.ceil((length - 1575) / 174))
 
-        if length <= (1566 + 15570 + 154800):  # 9 * (180 - 6) + 90 * (180 - 7) + 900 * (180 - 8)
-            return 9 + 89 + math.ceil((length - (1566 + 15397)) / 172)
+        # 171936 = 9 * (180-len(" 1/999")) + (99-9) * (180-len(" 10/999")) + (999-99) * (180-len(" 100/999"))
+        if length <= 171936:
+            # 17136 = 9 * (180-len(" 1/999")) + (99-9) * (180-len(" 10/999"))
+            # 172 = 180 - len(" 100/999")
+            return int(9 + 90 + math.ceil((length - 17136) / 172))
 
         # Someone's given us a string that needs to be broken up into 1000 or more substrings...
         iterations = 0
