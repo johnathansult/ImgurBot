@@ -3,6 +3,7 @@ import sqlite3
 import datetime
 import os
 import shutil
+import math
 
 from imgurpython import ImgurClient
 from imgurpython.helpers.error import ImgurClientError
@@ -10,6 +11,7 @@ from imgurpython.helpers.error import ImgurClientError
 # TODO: Implement rate limiting on non-OAuth calls.
 # TODO: Figure out some kind of failsafe that stops the client cold when ImgurClientRateLimitError is thrown.
 # ..... Hitting that 5x in a month bans the bot for the rest of the month.
+
 
 class ImgurBot:
     """
@@ -46,26 +48,27 @@ class ImgurBot:
         self.config = None
         self.client = None
         self.testing_mode = testing_mode
-        self.debug_mode = testing_mode or debug_mode
+        self.debug_mode = debug_mode
 
         # Set the bot's name (defaults to ImgurBot). Remove restricted filesystem characters while we're at it.
         self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
 
         if self.testing_mode:
-            print("Testing mode enabled; forcing debug_mode and performing early termination of __init__.")
-            print("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
+            print("Testing mode enabled; performing early termination of __init__.")
+            if name != self.name:
+                print("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
             return
 
-        # Initialize the logfile for writing.
+        # Initialize the logfile at log/NAME.log for writing.
         self.initialize_logging()
         self.log("Initializing ImgurBot version " + self.version + "...")
         if name != self.name:
             self.debug_log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
 
-        # Set up the SQLite database.
+        # Set up the SQLite database at db/NAME.db.
         self.initialize_database()
 
-        # Set up for ConfigParser.
+        # Set up the ConfigParser and load from ini/NAME.ini.
         self.initialize_config()
 
         # Initialize the client and perform authentication.
@@ -90,16 +93,6 @@ class ImgurBot:
             self.logfile.close()
 
     # External / Imgur-facing methods
-    def post_comment(self, gallery_id, comment_text):
-        """Posts the given string as a comment to the passed gallery id. If the string is too long for a single comment,
-        it is automatically split at the 180-character boundary.
-
-        TODO: Intelligent splitting on whitespace, indexing split comments with numbers.
-        :type gallery_id: str
-        :type comment_text: str
-        """
-        # TODO: Create.
-
     def get_new_auth_info(self, no_file_write=False):
         """ Interfaces with Imgur and the user to obtain access and refresh tokens, then writes them to the .ini file.
         """
@@ -151,7 +144,7 @@ class ImgurBot:
 
     # Internal / non Imgur-facing methods
     def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
-        """Writes the given message to $name.log, prefixed with current date and time. Ends with a newline.
+        """Writes the given message to NAME.log, prefixed with current date and time. Ends with a newline.
         Also prints the message to the screen.
 
         :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
@@ -164,7 +157,7 @@ class ImgurBot:
         self.logfile.write(prefix + message + '\n')
 
     def debug_log(self, message, prefix='[' + datetime.datetime.now().strftime("%c") + ']: DEBUG: '):
-        """If self.debug_mode is True: Writes the given message to $name.log, prefixed with current date and time.
+        """If self.debug_mode is True: Writes the given message to NAME.log, prefixed with current date and time.
         Ends with a newline. Also prints the message to the screen.
 
         :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
@@ -202,26 +195,23 @@ class ImgurBot:
         return cursor.fetchone() is not None
 
     def reset_seen(self, force=False):
-        """ Delete and re-create the 'seen' table in the database.
+        """ Delete all entries from 'Seen' table in the database. Due to the extremely destructive nature of this
+        method, this first prints a verification message and requires user input if the 'force' variable is not set.
 
         :param force: True to skip verification message.
         :type force: bool
         """
-        # TODO: Should this method be repurposed to only delete all rows and not remake the table? User may wish to
-        # ..... have a customized 'seen' table, in which case remaking it with default config is sub-optimal.
 
         assert self.db is not None, "Out-of-order call: initialize_database must be called before reset_seen."
 
         if not force:
-            response = self.get_input("Are you sure you want to delete and recreate the Seen table? (y/N): ")
+            response = self.get_input("Are you sure you want to delete all entries from the Seen table? (y/N): ")
             if response != 'y':
                 print("Canceling reset_seen.")
                 return
 
-        self.debug_log("Dropping 'Seen' table and recreating with no data.")
-        cursor = self.db.cursor()
-        cursor.execute("DROP TABLE IF EXISTS Seen")
-        cursor.execute("CREATE TABLE Seen(id TEXT PRIMARY KEY NOT NULL)")
+        self.debug_log("Deleting all entries from 'Seen' table.")
+        self.db.execute("DELETE FROM Seen")
         self.db.commit()
 
     def write_ini_file(self):
@@ -402,3 +392,74 @@ class ImgurBot:
 
         assert os.path.exists(path), "ensure_dir_in_cwd_exists: Directory %s not found even after creation" % path
         return path
+
+    @staticmethod
+    def process_comment(comment):
+        """Takes a string of arbitrary length and processes it into comment chunks that meet Imgur's 180-character
+        requirement.
+
+        If the string is <= 180 characters in length, it is returned as-is.
+        If it is greater, it is broken up into a list of substrings such that each substring plus an indexing suffix
+        totals no more than 180 characters in length.
+
+        :param comment: A string of arbitrary length.
+        :type comment: str
+        :return: A list of strings.
+        """
+
+        # TODO: Break at syllable boundary. If no valid syllable immediately before 180, break at whitespace. If no
+        # ..... valid whitespace within X characters of 180-character boundary, break at 180-character boundary.
+
+        comment_list = []
+
+        # If the comment fits within one comment block, return as-is.
+        if len(comment) <= 180:
+            comment_list.append(comment)
+            return comment_list
+
+        # Calculate out the total number of comment blocks needed.
+        suffix = str(ImgurBot.calculate_comment_suffix(comment))
+        suffix_length = len(suffix)
+
+        # Append each comment (with " index/total" appended to it) to the comment_list.
+        iterations = 0
+        while len(comment) > 0:
+            iterations += 1
+            # Magic number explanation: 180 characters - (len(" ") + len("/")) = 178 characters
+            max_len = int(178 - math.ceil(math.log10(iterations + 1)) - suffix_length)
+            comment_list.append(comment[0:max_len] + " " + str(iterations) + "/" + suffix)
+            comment = comment[max_len:]
+
+        return comment_list
+
+    @staticmethod
+    def calculate_comment_suffix(comment):
+        """Brute-force calculate the total number of comments generated from the splitting of arbitrary string 'comment'
+            of length > 180.
+        """
+
+        # TODO: Accelerate with pre-calculation. We lose the flexibility of arbitrarily long strings though.
+        # 1-9/#: 1584 chars
+        # 1-9/## + 10-99/##: 1575 + 15486 = 17061
+
+        length = len(comment)
+
+        iterations = 0
+        reserved = 1
+        while True:
+            iterations += 1
+
+            # Calculate the maximum allowable length for this comment chunk.
+            max_len = int(178 - math.ceil(math.log10(iterations + 1)) - reserved)  # 180 - (len(" ") + len("/")) = 178
+
+            # Ending case: The entirety of the remaining text fits within (178 - ceil(log10(iterations)) - reserved).
+            if length <= max_len:
+                return iterations
+
+            # Edge case: We require more space for the total than is reserved.
+            if math.ceil(math.log10(iterations + 1)) > reserved:
+                reserved += 1  # Increment our reservation.
+                iterations = 0
+                length = len(comment)  # Start over.
+            else:
+                length -= max_len

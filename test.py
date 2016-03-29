@@ -5,9 +5,6 @@ import sqlite3
 
 name = "ImgurTestBot"
 
-ImgurBot.ImgurBot.get_input("WARNING: This will delete all files in the ini, log, and db directories. "
-                            "Press 'enter' to proceed with the test.")
-
 
 # Directory destruction and creation methods, used in the following tests.
 def delete_dir(directory):
@@ -25,32 +22,61 @@ def verify_file_exists(my_file):
 
 
 def new_test_set(message):
-    global test_set
+    global test_set, test_index
     if test_set >= 0:
         print("\n* Successful completion of Test Set " + str(test_set + 1) + ".")
     test_set += 1
+    test_index = 1
     print("* Beginning Test Set " + str(test_set + 1) + ": " + message)  # Displays as 1 on first call, then 2, 3...
 test_set = -1  # Starts at -1 so that it becomes 0 on the first new_test_set call.
 
 
 def test_msg(message):
     global test_index, test_set
-    if len(test_index) <= test_set:
-        test_index.append(1)
-
-    print("\n* Test case " + str(test_set + 1) + "-" + str(test_index[test_set]) + ": " + message)
-    test_index[test_set] += 1
-test_index = []
+    print("* Test case " + str(test_set + 1) + "-" + str(test_index) + ": " + message)
+    test_index += 1
+test_index = 1
 
 
 def finished_testing():
     global test_set
-    print("\n* Successful completion of Test Set " + str(test_set + 1) + ". All tests complete.")
+    print("* Successful completion of Test Set " + str(test_set + 1) + ". All tests complete.")
     exit(0)
 
 
+# Static method tests.
+# TODO: Test get_input.
+# TODO: Test get_raw_config_parser.
+# TODO: Test ensure_dir_in_cwd_exists.
+
+new_test_set("Comment processing.")
+import string
+import random
+
+# TODO: Fuzz more with random inputs.
+
+test_msg("Test with comments < 180 characters.")
+for i in range(1,179):
+    random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(i))
+    for comment in ImgurBot.ImgurBot.process_comment(random_comment):
+        assert len(comment) <= 180
+        assert comment == random_comment
+
+test_msg("Test with comment == 180 characters.")
+random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(180))
+for comment in ImgurBot.ImgurBot.process_comment(random_comment):
+    assert len(comment) <= 180
+    assert comment == random_comment
+
+test_msg("Test with comment > 180 characters.")
+random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20000))
+for comment in ImgurBot.ImgurBot.process_comment(random_comment):
+    assert len(comment) <= 180
+
 # Test case setup: Initialize logging when no directories exist.
 new_test_set("Initialization of bot with no directories or files.")
+ImgurBot.ImgurBot.get_input("WARNING: This will delete all files in the ini, log, and db directories. "
+                            "Press 'enter' to proceed with the test.")
 
 delete_dir("log")
 delete_dir("db")
@@ -107,6 +133,7 @@ except sqlite3.IntegrityError as e:
     pass
 else:
     print("Test failure: mark_seen of previously seen post did not produce an error.")
+    exit(1)
 
 assert bot.has_seen("1") == True
 assert bot.has_seen("0") == False
