@@ -435,29 +435,40 @@ class ImgurBot:
 
     @staticmethod
     def calculate_comment_suffix(comment):
-        """Brute-force calculate the total number of comments generated from the splitting of arbitrary string 'comment'
-            of length > 180.
-        """
+        """Calculate the number of substrings generated from spitting the given comment string into Imgur-length strings
+        of length <= 180. Includes calculation to allow each string to have a suffix that indicates its index and the
+        total number of substrings calculated.
 
-        # TODO: Accelerate with pre-calculation. We lose the flexibility of arbitrarily long strings though.
-        # 1-9/#: 1584 chars
-        # 1-9/## + 10-99/##: 1575 + 15486 = 17061
+        Accelerated pre-calculation available for strings less than 171937 characters in length. For the sake of
+        completeness, brute-force calculation is performed on strings greater than that length.
+        """
 
         length = len(comment)
 
+        if length <= 1584: # 180 chars - 4 chars per suffix = 176; 176 * 9 = 1584
+            return math.ceil(length / 176)
+
+        if length <= (1575 + 15660): # 9 * (180-5) + 90 * (180 - 6)
+            return 9 + math.ceil((length - 1575) / 174)
+
+        if length <= (1566 + 15570 + 154800):  # 9 * (180 - 6) + 90 * (180 - 7) + 900 * (180 - 8)
+            return 9 + 89 + math.ceil((length - (1566 + 15397)) / 172)
+
+        # Someone's given us a string that needs to be broken up into 1000 or more substrings...
         iterations = 0
-        reserved = 1
+        reserved = 4
         while True:
             iterations += 1
 
             # Calculate the maximum allowable length for this comment chunk.
-            max_len = int(178 - math.ceil(math.log10(iterations + 1)) - reserved)  # 180 - (len(" ") + len("/")) = 178
+            # Magic number explanation: 180 - (len(" ") + len("/")) = 178
+            max_len = int(178 - math.ceil(math.log10(iterations + 1)) - reserved)
 
-            # Ending case: The entirety of the remaining text fits within (178 - ceil(log10(iterations)) - reserved).
+            # Ending case: The remaining text is less than or equal to our maximum length.
             if length <= max_len:
                 return iterations
 
-            # Edge case: We require more space for the total than is reserved.
+            # Edge case: We require more space to write the count of the substrings than is reserved.
             if math.ceil(math.log10(iterations + 1)) > reserved:
                 reserved += 1  # Increment our reservation.
                 iterations = 0
