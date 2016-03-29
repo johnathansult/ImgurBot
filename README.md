@@ -5,7 +5,9 @@ Current Features:
 -----------------
 -	Interactive bot registration and authentication workflow.
 -	SQLite DB that tracks seen posts.
+-	Splitting and indexing of over-length comment strings.
 
 Planned Features:
 -----------------
--	Posting of comments, with auto-breaking at character limits.
+-	Rate-limited posting of comments.
+-	Ability to queue up actions with delays to prevent exceeding of rate limit.

@@ -5,6 +5,7 @@ import sqlite3
 
 name = "ImgurTestBot"
 
+# TODO: Should this entire file be moved into ImgurBot as a if-main-then test?
 
 # Directory destruction and creation methods, used in the following tests.
 def delete_dir(directory):

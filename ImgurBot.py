@@ -15,9 +15,9 @@ from imgurpython.helpers.error import ImgurClientError
 
 class ImgurBot:
     """
-    A class to implement a bot for interfacing with Imgur.
+    A class that implements a bot for interfacing with Imgur.
     """
-    version = "0.1a"
+    version = "0.2a"
 
     # From https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words.
     # Space not included since it's safe in these use cases. Other characters are probably safe too, but YMMV.
@@ -36,7 +36,7 @@ class ImgurBot:
         """
 
         # Table of instance variables: These are pre-defined here so that the initialize_x() methods can be used to
-        #    init the bot without loss of clarity.
+        #    init the bot without loss of readability.
         self.log_dir = None
         self.log_path = None
         self.logfile = None
@@ -53,6 +53,7 @@ class ImgurBot:
         # Set the bot's name (defaults to ImgurBot). Remove restricted filesystem characters while we're at it.
         self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
 
+        # Testing mode check: If we're in testing mode, stop here. Print the disallowed characters debug statement too.
         if self.testing_mode:
             print("Testing mode enabled; performing early termination of __init__.")
             if name != self.name:
