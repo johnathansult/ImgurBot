@@ -410,6 +410,7 @@ class ImgurBot:
 
         # TODO: Break at syllable boundary. If no valid syllable immediately before 180, break at whitespace. If no
         # ..... valid whitespace within X characters of 180-character boundary, break at 180-character boundary.
+        # TeX has a useful hyphenation algorithm that we might be able to incorporate here.
 
         comment_list = []
 
@@ -468,6 +469,10 @@ class ImgurBot:
             return int(9 + 90 + math.ceil((length - 17136) / 172))
 
         # Someone's given us a string that needs to be broken up into 1000 or more substrings...
+        # Reserve 4 characters for the total and begin brute-force calculating how many substrings we'll need to hold
+        #  the entirety of the comment. If we have more than 9999 substrings required, reserve 5 characters and start
+        #  over, etc.
+        # TODO: This was written for the sake of completeness, but is it even desirable to have this happen?
         iterations = 0
         reserved = 4
         while True:
