@@ -57,14 +57,14 @@ class ImgurBot:
         if self.testing_mode:
             print("Testing mode enabled; performing early termination of __init__.")
             if name != self.name:
-                print("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
+                print("Disallowed characters removed from bot name ('{0}' > '{1}').".format(name, self.name))
             return
 
         # Initialize the logfile at log/NAME.log for writing.
         self.initialize_logging()
-        self.log("Initializing ImgurBot version " + self.version + "...")
+        self.log("Initializing ImgurBot version {0}...".format(self.version))
         if name != self.name:
-            self.debug_log("Disallowed characters removed from bot name ('" + name + "' > '" + self.name + "').")
+            self.debug_log("Disallowed characters removed from bot name ('{0}' > '{1}').".format(name, self.name))
 
         # Set up the SQLite database at db/NAME.db.
         self.initialize_database()
@@ -74,7 +74,7 @@ class ImgurBot:
 
         # Initialize the client and perform authentication.
         self.initialize_client()
-        self.log("Initialization of bot '" + self.name + "' complete.")
+        self.log("Initialization of bot '{0}' complete.".format(self.name))
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
@@ -103,7 +103,7 @@ class ImgurBot:
 
         print("")
         self.log("You need to supply your PIN to obtain access and refresh tokens.")
-        self.log("Go to the following URL: " + format(self.client.get_auth_url('pin')))
+        self.log("Go to the following URL: {0}".format(self.client.get_auth_url('pin')))
 
         credentials = []
 
@@ -122,14 +122,14 @@ class ImgurBot:
                     result = self.get_input("Your client credentials were incorrect. " +
                                             "Would you like to go through interactive bot registration? (y/N): ")
                     if result == 'y':
-                        self.log("Moving " + self.ini_path + " to " + self.ini_path + ".old.")
-                        shutil.copy(self.ini_path, self.ini_path + ".old")
+                        self.log("Moving {0} to {0}.old.".format(self.ini_path))
+                        shutil.copy(self.ini_path, "{0}.old".format(self.ini_path))
                         os.remove(self.ini_path)
                         self.initialize_config()
                         self.initialize_client()
                         return
                     else:
-                        self.log("Your initial client credentials were invalid. Correct them in " + self.ini_path + ".")
+                        self.log("Your initial client credentials were invalid. Correct them in {0}.".format(self.ini_path))
                         raise
 
         self.log("Access and refresh token successfully obtained.")
@@ -144,7 +144,7 @@ class ImgurBot:
         self.write_ini_file()
 
     # Internal / non Imgur-facing methods
-    def log(self, message, prefix='['+datetime.datetime.now().strftime("%c")+']: '):
+    def log(self, message, prefix="[{0}]: ".format(datetime.datetime.now().strftime("%c"))):
         """Writes the given message to NAME.log, prefixed with current date and time. Ends with a newline.
         Also prints the message to the screen.
 
@@ -157,7 +157,7 @@ class ImgurBot:
         print(message)
         self.logfile.write(prefix + message + '\n')
 
-    def debug_log(self, message, prefix='[' + datetime.datetime.now().strftime("%c") + ']: DEBUG: '):
+    def debug_log(self, message, prefix="[{0}]: DEBUG: ".format(datetime.datetime.now().strftime("%c"))):
         """If self.debug_mode is True: Writes the given message to NAME.log, prefixed with current date and time.
         Ends with a newline. Also prints the message to the screen.
 
@@ -216,18 +216,18 @@ class ImgurBot:
         self.db.commit()
 
     def write_ini_file(self):
-        self.debug_log("Writing config file at " + self.ini_path + ".")
+        self.debug_log("Writing config file at {0}.".format(self.ini_path))
         try:
             with open(self.ini_path, 'w') as ini_file:
                 self.config.write(ini_file)
         except IOError as e:
-            self.log("Error when writing config file at " + self.ini_path + ": " + str(e) + ": " + str(e.args))
+            self.log("Error when writing config file at {0}: {1}: {2}".format(self.ini_path, str(e), str(e.args)))
             self.log("Please manually create the file with the following contents: \n")
             self.log("[credentials]")
-            self.log("client_id = " + self.config.get('credentials', 'client_id'))
-            self.log("client_secret = " + self.config.get('credentials', 'client_secret'))
-            self.log("access_token = " + self.config.get('credentials', 'access_token'))
-            self.log("refresh_token = " + self.config.get('credentials', 'refresh_token'))
+            self.log("client_id = {0}".format(self.config.get('credentials', 'client_id')))
+            self.log("client_secret = {0}".format(self.config.get('credentials', 'client_secret')))
+            self.log("access_token = {0}".format(self.config.get('credentials', 'access_token')))
+            self.log("refresh_token = {0}".format(self.config.get('credentials', 'refresh_token')))
             raise
 
     # Methods used to initialize the bot.
@@ -237,18 +237,18 @@ class ImgurBot:
 
         # Broken out from __init__ to aid in testing.
         self.log_dir = ImgurBot.ensure_dir_in_cwd_exists("log")
-        self.log_path = os.path.normpath(self.log_dir + "/" + self.name + ".log")
+        self.log_path = os.path.join(self.log_dir, "{0}.log".format(self.name))
 
         self.logfile = open(self.log_path, 'a')
 
     def initialize_database(self):
         self.db_dir = ImgurBot.ensure_dir_in_cwd_exists("db")
-        self.db_path = os.path.normpath(self.db_dir + "/" + self.name + ".db")
+        self.db_path = os.path.join(self.db_dir, "{0}.db".format(self.name))
 
         try:
             # Inform the user that a new .db file is being created (if not previously extant).
             if not os.path.isfile(self.db_path):
-                self.debug_log("Creating database at " + self.db_path + ".")
+                self.debug_log("Creating database at {0}.".format(self.db_path))
 
             # Connect and ensure that the database is set up properly.
             self.db = sqlite3.connect(self.db_path)
@@ -256,14 +256,14 @@ class ImgurBot:
             cursor.execute("CREATE TABLE IF NOT EXISTS Seen(id TEXT PRIMARY KEY NOT NULL)")
 
         except sqlite3.Error as e:
-            self.log("Error in DB setup: " + str(e) + ": " + str(e.args) + ". Terminating.")
+            self.log("Error in DB setup: {0}: {1}.".format(str(e), str(e.args)))
             if self.db:
                 self.db.close()
             raise
 
     def initialize_config(self):
         self.ini_dir = ImgurBot.ensure_dir_in_cwd_exists("ini")
-        self.ini_path = os.path.normpath(self.ini_dir + "/" + self.name + ".ini")
+        self.ini_path = os.path.join(self.ini_dir, "{0}.ini".format(self.name))
 
         # Generate our config parser.
         self.config = self.get_raw_config_parser()
@@ -282,7 +282,7 @@ class ImgurBot:
                 client_id = self.get_input("Enter your client_id: ")
                 client_secret = self.get_input("Enter your client_secret: ")
                 print("")
-                reply = self.get_input("You entered client_id " + client_id + " and client_secret " + client_secret +
+                reply = self.get_input("You entered client_id {0} and _secret {1}".format(client_id, client_secret) +
                                        ". Are these correct? (y/N): ")
                 if reply == "y":
                     self.config.set('credentials', 'client_id', client_id)
@@ -295,7 +295,7 @@ class ImgurBot:
                     access_token = self.get_input("Enter your access token: ")
                     refresh_token = self.get_input("Enter your refresh token: ")
                     reply = self.get_input(
-                        "You entered access token " + access_token + " and refresh token " + refresh_token +
+                        "You entered access token {0} and refresh token {1}".format(access_token, refresh_token) +
                         ". Are these correct? (y/N): ")
                     if reply == "y":
                         self.config.set('credentials', 'access_token', access_token)
@@ -314,8 +314,7 @@ class ImgurBot:
             self.client = ImgurClient(self.config.get('credentials', 'client_id'),
                                       self.config.get('credentials', 'client_secret'))
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
-            self.log("Error when parsing config from " + self.ini_path + ": " + str(e) + ": " + str(e.args) +
-                     ". Terminating.")
+            self.log("Error when parsing config from {0}: {1}: {2}.".format(self.ini_path, str(e), str(e.args)))
             raise
 
         # Auth verification loop.
@@ -376,22 +375,25 @@ class ImgurBot:
     @staticmethod
     def ensure_dir_in_cwd_exists(directory):
         """ Guarantees that the given directory exists by creating it if not extant.
-        Note that this removes all slashes from the passed-in directory parameter, and as such will only ever create
-        directories in the current working directory.
+        Note that this removes all slashes and other filesystem-used characters from the passed-in directory parameter,
+        and as such will only ever create directories in the current working directory.
 
         :param directory: str
         :return: The full OS-normalized path to the directory with no trailing slash.
         """
-        path = os.path.normpath(os.getcwd() + "/" + directory.translate(None, ImgurBot.restricted_filesystem_chars))
+
+        # TODO: Is stripping out sensitive characters the best way to handle it, or should we assume the user knows
+        # ..... what they're doing?
+
+        path = os.path.join(os.getcwd(), directory.translate(None, ImgurBot.restricted_filesystem_chars))
         if not os.path.exists(path):
             try:
                 os.makedirs(path)
             except OSError as e:
-                print("Error creating directory " + path + ": " + str(e) + ":" + str(e.args[0]))
+                print("Error creating directory {0}: {1}: {2}.".format(path, str(e), str(e.args[0])))
                 raise
 
-
-        assert os.path.exists(path), "ensure_dir_in_cwd_exists: Directory %s not found even after creation" % path
+        assert os.path.exists(path), "ensure_dir_in_cwd_exists: Directory {0} not found after creation.".format(path)
         return path
 
     @staticmethod
@@ -472,7 +474,10 @@ class ImgurBot:
         # Reserve 4 characters for the total and begin brute-force calculating how many substrings we'll need to hold
         #  the entirety of the comment. If we have more than 9999 substrings required, reserve 5 characters and start
         #  over, etc.
+
         # TODO: This was written for the sake of completeness, but is it even desirable to have this happen?
+        # ..... maybe we should raise an exception instead.
+
         iterations = 0
         reserved = 4
         while True:
