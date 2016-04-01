@@ -56,25 +56,26 @@ new_test_set("Comment processing.")
 
 # TODO: Fuzz more with random inputs.
 
-test_msg("Test with comments < 180 characters.")
+test_msg("Test with comments < 180 characters in length.")
 for i in range(1, 179):
     random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(i))
     for comment in ImgurBot.ImgurBot.process_comment(random_comment):
         assert len(comment) <= 180
         assert comment == random_comment
 
-test_msg("Test with comment == 180 characters.")
+test_msg("Test with comment == 180 characters in length.")
 # noinspection PyRedeclaration
 random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(180))
 for comment in ImgurBot.ImgurBot.process_comment(random_comment):
     assert len(comment) <= 180
     assert comment == random_comment
 
-test_msg("Test with comment > 180 characters.")
-# noinspection PyRedeclaration
-random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20000))
-for comment in ImgurBot.ImgurBot.process_comment(random_comment):
-    assert len(comment) <= 180
+test_msg("Test with comments where 181 <= length <= 500181 characters (increments of 10000).")
+for i in range(181, 500181, 10000):
+    # noinspection PyRedeclaration
+    random_comment = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(i))
+    for comment in ImgurBot.ImgurBot.process_comment(random_comment):
+        assert len(comment) <= 180
 
 # Test case setup: Initialize logging when no directories exist.
 new_test_set("Initialization of bot with no directories or files.")

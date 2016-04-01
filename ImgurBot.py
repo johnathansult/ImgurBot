@@ -9,7 +9,7 @@ from imgurpython import ImgurClient
 from imgurpython.helpers.error import ImgurClientError
 
 # TODO: Implement rate limiting on non-OAuth calls.
-# TODO: Figure out some kind of failsafe that stops the client cold when ImgurClientRateLimitError is thrown.
+# TODO: Figure out some kind of fail-safe that stops the client cold when ImgurClientRateLimitError is thrown.
 # ..... Hitting that 5x in a month bans the bot for the rest of the month.
 
 
@@ -419,7 +419,7 @@ class ImgurBot:
             return comment_list
 
         # Calculate out the total number of comment blocks needed.
-        suffix = ImgurBot.calculate_comment_suffix(comment)
+        suffix = ImgurBot.calculate_number_of_comment_chunks(comment)
         suffix_length = len(str(suffix))
 
         # Append each comment (with " index/total" appended to it) to the comment_list.
@@ -437,12 +437,12 @@ class ImgurBot:
         return comment_list
 
     @staticmethod
-    def calculate_comment_suffix(comment):
+    def calculate_number_of_comment_chunks(comment):
         """Calculate the number of substrings generated from spitting the given comment string into Imgur-length strings
         of length <= 180. Includes calculation to allow each string to have a suffix that indicates its index and the
         total number of substrings calculated.
 
-        Accelerated pre-calculation available for strings less than 171937 characters in length. For the sake of
+        Accelerated pre-calculation available for strings <= 171936 characters in length. For the sake of
         completeness, brute-force calculation is performed on strings greater than that length.
 
         Note: Explanations for pre-calculated magic numbers are provided in comments preceding the number's use.
