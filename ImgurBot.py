@@ -1,9 +1,10 @@
-import ConfigParser
 import sqlite3
 import datetime
 import os
 import shutil
 import math
+
+import ConfigParser
 
 from imgurpython import ImgurClient
 from imgurpython.helpers.error import ImgurClientError
@@ -11,6 +12,11 @@ from imgurpython.helpers.error import ImgurClientError
 # TODO: Implement rate limiting on non-OAuth calls.
 # TODO: Figure out some kind of fail-safe that stops the client cold when ImgurClientRateLimitError is thrown.
 # ..... Hitting that 5x in a month bans the bot for the rest of the month.
+
+
+# TODO: Mid-process: Convert log and debug_log statements to unified logs with log levels.
+
+# TODO: Look into making this truly Python 2/3 compatible (currently 2-exclusive with 3 compat thrown in).
 
 
 class ImgurBot:
@@ -23,8 +29,9 @@ class ImgurBot:
     # Space not included since it's safe in these use cases. Other characters are probably safe too, but YMMV.
     # TODO: Figure out if any other characters can be pruned from this list for enhanced user-friendliness.
     restricted_filesystem_chars = "/\\?*%:|\"<>."
+    log_levels = {"Debug": 5, "Information": 4, "Warning": 3, "Error": 2, "Fatal": 1}
 
-    def __init__(self, name="ImgurBot", testing_mode=False, debug_mode=False):
+    def __init__(self, name="ImgurBot", print_at_log_level="Warning", testing_mode=False):
         """Initialize the ImgurBot.
 
         :type name: str
@@ -37,34 +44,41 @@ class ImgurBot:
 
         # Table of instance variables: These are pre-defined here so that the initialize_x() methods can be used to
         #    init the bot without loss of readability.
-        self.log_dir = None
+
+        # TODO: Comments.
         self.log_path = None
-        self.logfile = None
-        self.db_dir = None
         self.db_path = None
-        self.db = None
-        self.ini_dir = None
         self.ini_path = None
+
+        self.db = None
+        self.logfile = None
         self.config = None
+
         self.client = None
         self.testing_mode = testing_mode
-        self.debug_mode = debug_mode
 
         # Set the bot's name (defaults to ImgurBot). Remove restricted filesystem characters while we're at it.
         self.name = name.translate(None, ImgurBot.restricted_filesystem_chars)
+
+        # Set the bot's log level (defaults to Warning).
+        if print_at_log_level not in ImgurBot.log_levels:
+            print("Log level {0} is not a valid log level. Defaulting to 'Warning'.".format(str(print_at_log_level)))
+            self.print_at_log_level = "Warning"
+        else:
+            self.print_at_log_level = print_at_log_level
 
         # Testing mode check: If we're in testing mode, stop here. Print the disallowed characters debug statement too.
         if self.testing_mode:
             print("Testing mode enabled; performing early termination of __init__.")
             if name != self.name:
-                print("Disallowed characters removed from bot name ('{0}' > '{1}').".format(name, self.name))
+                print("Disallowed characters removed from bot name; now '{0}'.".format(self.name))
             return
 
         # Initialize the logfile at log/NAME.log for writing.
         self.initialize_logging()
-        self.log("Initializing ImgurBot version {0}...".format(self.version))
+        self.log("Initializing ImgurBot version {0}...".format(self.version), "Debug")
         if name != self.name:
-            self.debug_log("Disallowed characters removed from bot name ('{0}' > '{1}').".format(name, self.name))
+            self.log("Disallowed characters removed from bot name; now '{0}'.".format(self.name), "Information")
 
         # Set up the SQLite database at db/NAME.db.
         self.initialize_database()
@@ -74,7 +88,7 @@ class ImgurBot:
 
         # Initialize the client and perform authentication.
         self.initialize_client()
-        self.log("Initialization of bot '{0}' complete.".format(self.name))
+        self.log("Initialization of bot '{0}' complete.".format(self.name), "Debug")
 
     def __del__(self):
         """Deconstruct the ImgurBot."""
@@ -90,7 +104,7 @@ class ImgurBot:
 
         # Close the logfile.
         if self.logfile is not None:
-            self.log("Successful termination of ImgurBot.")
+            self.log("Successful termination of ImgurBot.", "Debug")
             self.logfile.close()
 
     # External / Imgur-facing methods
@@ -102,8 +116,8 @@ class ImgurBot:
         assert self.client is not None, "Out-of-order call: initialize_client must be called before get_new_auth_info."
 
         print("")
-        self.log("You need to supply your PIN to obtain access and refresh tokens.")
-        self.log("Go to the following URL: {0}".format(self.client.get_auth_url('pin')))
+        print("You need to supply your PIN to obtain access and refresh tokens.")
+        print("Go to the following URL: {0}".format(self.client.get_auth_url('pin')))
 
         credentials = []
 
@@ -122,17 +136,18 @@ class ImgurBot:
                     result = self.get_input("Your client credentials were incorrect. " +
                                             "Would you like to go through interactive bot registration? (y/N): ")
                     if result == 'y':
-                        self.log("Moving {0} to {0}.old.".format(self.ini_path))
+                        self.log("Moving {0} to {0}.old.".format(self.ini_path), "Information")
                         shutil.copy(self.ini_path, "{0}.old".format(self.ini_path))
                         os.remove(self.ini_path)
                         self.initialize_config()
                         self.initialize_client()
                         return
                     else:
-                        self.log("Your initial client credentials were invalid. Correct them in {0}.".format(self.ini_path))
+                        self.log("Your client credentials were invalid. Correct them in {0}.".format(self.ini_path),
+                                 "Error")
                         raise
 
-        self.log("Access and refresh token successfully obtained.")
+        self.log("Access and refresh token successfully obtained.", "Debug")
         # noinspection PyTypeChecker
         self.config.set('credentials', 'access_token', credentials['access_token'])
         # noinspection PyTypeChecker
@@ -144,32 +159,19 @@ class ImgurBot:
         self.write_ini_file()
 
     # Internal / non Imgur-facing methods
-    def log(self, message, prefix="[{0}]: ".format(datetime.datetime.now().strftime("%c"))):
+    def log(self, message, log_level):
         """Writes the given message to NAME.log, prefixed with current date and time. Ends with a newline.
         Also prints the message to the screen.
 
-        :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
+        :param log_level: A string to indicate the level of the log message.
         :type message: str
-        :type prefix: str
+        :type log_level: str
         """
         assert self.logfile is not None, "Out-of-order call: initialize_logging must be called before log."
 
-        print(message)
-        self.logfile.write(prefix + message + '\n')
-
-    def debug_log(self, message, prefix="[{0}]: DEBUG: ".format(datetime.datetime.now().strftime("%c"))):
-        """If self.debug_mode is True: Writes the given message to NAME.log, prefixed with current date and time.
-        Ends with a newline. Also prints the message to the screen.
-
-        :param prefix: A string to prepend to the passed string. Defaults to the current date and time.
-        :type message: str
-        :type prefix: str
-        """
-        if self.debug_mode:
-            assert self.logfile is not None, "Out-of-order call: initialize_logging must be called before debug_log."
-
+        self.logfile.write("[{0}-{1}]: ".format(datetime.datetime.now().strftime("%c"), log_level) + message + '\n')
+        if ImgurBot.log_levels[log_level] <= ImgurBot.log_levels[self.print_at_log_level]:
             print(message)
-            self.logfile.write(prefix + message + '\n')
 
     def mark_seen(self, post_id):
         """Marks a post identified by post_id as seen.
@@ -211,44 +213,45 @@ class ImgurBot:
                 print("Canceling reset_seen.")
                 return
 
-        self.debug_log("Deleting all entries from 'Seen' table.")
+        self.log("Deleting all entries from 'Seen' table.", "Debug")
         self.db.execute("DELETE FROM Seen")
         self.db.commit()
 
     def write_ini_file(self):
-        self.debug_log("Writing config file at {0}.".format(self.ini_path))
+        self.log("Writing config file at {0}.".format(self.ini_path), "Debug")
         try:
             with open(self.ini_path, 'w') as ini_file:
                 self.config.write(ini_file)
         except IOError as e:
-            self.log("Error when writing config file at {0}: {1}: {2}".format(self.ini_path, str(e), str(e.args)))
-            self.log("Please manually create the file with the following contents: \n")
-            self.log("[credentials]")
-            self.log("client_id = {0}".format(self.config.get('credentials', 'client_id')))
-            self.log("client_secret = {0}".format(self.config.get('credentials', 'client_secret')))
-            self.log("access_token = {0}".format(self.config.get('credentials', 'access_token')))
-            self.log("refresh_token = {0}".format(self.config.get('credentials', 'refresh_token')))
+            self.log("Error when writing config file at {0}: {1}: {2}\n".format(self.ini_path, str(e), str(e.args)) +
+                     "Please manually create the file with the following contents: \n" +
+                     "\n" +
+                     "[credentials]\n" +
+                     "client_id = {0}\n".format(self.config.get('credentials', 'client_id')) +
+                     "client_secret = {0}\n".format(self.config.get('credentials', 'client_secret')) +
+                     "access_token = {0}\n".format(self.config.get('credentials', 'access_token')) +
+                     "refresh_token = {0}\n".format(self.config.get('credentials', 'refresh_token')), "Error")
             raise
 
     # Methods used to initialize the bot.
     def initialize_logging(self):
         """Forces the creation of the log directory, then creates/opens the logfile there. Also initializes the (self.)
-        log_dir, log_path and logfile variables."""
+        log_path and logfile variables."""
 
         # Broken out from __init__ to aid in testing.
-        self.log_dir = ImgurBot.ensure_dir_in_cwd_exists("log")
-        self.log_path = os.path.join(self.log_dir, "{0}.log".format(self.name))
+        log_dir = ImgurBot.ensure_dir_in_cwd_exists("log")
+        self.log_path = os.path.join(log_dir, "{0}.log".format(self.name))
 
         self.logfile = open(self.log_path, 'a')
 
     def initialize_database(self):
-        self.db_dir = ImgurBot.ensure_dir_in_cwd_exists("db")
-        self.db_path = os.path.join(self.db_dir, "{0}.db".format(self.name))
+        db_dir = ImgurBot.ensure_dir_in_cwd_exists("db")
+        self.db_path = os.path.join(db_dir, "{0}.db".format(self.name))
 
         try:
             # Inform the user that a new .db file is being created (if not previously extant).
             if not os.path.isfile(self.db_path):
-                self.debug_log("Creating database at {0}.".format(self.db_path))
+                self.log("Creating database at {0}.".format(self.db_path), "Debug")
 
             # Connect and ensure that the database is set up properly.
             self.db = sqlite3.connect(self.db_path)
@@ -256,14 +259,14 @@ class ImgurBot:
             cursor.execute("CREATE TABLE IF NOT EXISTS Seen(id TEXT PRIMARY KEY NOT NULL)")
 
         except sqlite3.Error as e:
-            self.log("Error in DB setup: {0}: {1}.".format(str(e), str(e.args)))
+            self.log("Error in DB setup: {0}: {1}.".format(str(e), str(e.args)), "Error")
             if self.db:
                 self.db.close()
             raise
 
     def initialize_config(self):
-        self.ini_dir = ImgurBot.ensure_dir_in_cwd_exists("ini")
-        self.ini_path = os.path.join(self.ini_dir, "{0}.ini".format(self.name))
+        ini_dir = ImgurBot.ensure_dir_in_cwd_exists("ini")
+        self.ini_path = os.path.join(ini_dir, "{0}.ini".format(self.name))
 
         # Generate our config parser.
         self.config = self.get_raw_config_parser()
@@ -272,7 +275,7 @@ class ImgurBot:
         if not os.path.isfile(self.ini_path):
             self.config.add_section('credentials')
 
-            self.debug_log("No .ini file was found. Beginning interactive creation.")
+            self.log("No .ini file was found. Beginning interactive creation.", "Debug")
             print("")
             print("To proceed, you will need a client_id and client_secret tokens, which can be obtained from Imgur at")
             print("the following website: https://api.imgur.com/oauth2/addclient")
@@ -314,7 +317,8 @@ class ImgurBot:
             self.client = ImgurClient(self.config.get('credentials', 'client_id'),
                                       self.config.get('credentials', 'client_secret'))
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
-            self.log("Error when parsing config from {0}: {1}: {2}.".format(self.ini_path, str(e), str(e.args)))
+            self.log("Error when parsing config from {0}: {1}: {2}.".format(self.ini_path, str(e), str(e.args)),
+                     "Error")
             raise
 
         # Auth verification loop.
@@ -333,7 +337,7 @@ class ImgurBot:
                 self.client.get_account('me')
             except ImgurClientError as e:
                 if str(e) == "(400) Error refreshing access token!":
-                    self.log("The supplied access and refresh tokens were invalid.")
+                    self.log("The supplied access and refresh tokens were invalid.", "Error")
                     self.config.remove_option('credentials', 'access_token')
                     self.config.remove_option('credentials', 'refresh_token')
             else:

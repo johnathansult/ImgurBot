@@ -85,7 +85,7 @@ ImgurBot.ImgurBot.get_input("WARNING: This will delete all files in the ini, log
 delete_dir("log")
 delete_dir("db")
 delete_dir("ini")
-bot = ImgurBot.ImgurBot(name, True)
+bot = ImgurBot.ImgurBot(name, print_at_log_level="Debug", testing_mode=True)
 
 test_msg("Initialize logging when no log directory exists.")
 bot.initialize_logging()
@@ -116,7 +116,7 @@ del bot
 
 new_test_set("Database tests.")
 # Test case: Adding to empty Seen table.
-bot = ImgurBot.ImgurBot(name, True)
+bot = ImgurBot.ImgurBot(name, print_at_log_level="Debug", testing_mode=True)
 bot.initialize_logging()
 bot.initialize_database()
 
